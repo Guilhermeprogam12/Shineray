@@ -1,1 +1,0 @@
-# Shineray-Desparador
