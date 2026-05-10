@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shineray Dispatcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        shineray: {
+                            50: '#FFF1F3', 100: '#FFE0E5', 200: '#FFC6CF',
+                            300: '#FF9DAE', 400: '#FF6B85', 500: '#E31937',
+                            600: '#CC0F2C', 700: '#A80D25', 800: '#8A0F23',
+                            900: '#6E1120', 950: '#3C050E',
+                        },
+                        dark: {
+                            50: '#F5F5F6', 100: '#E6E6E8', 200: '#CCCCCC',
+                            300: '#99999D', 400: '#66666C', 500: '#4A4A50',
+                            600: '#3A3A40', 700: '#2A2A30', 800: '#1E1E24',
+                            900: '#111118', 950: '#0A0A0F',
+                        }
+                    },
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4A4A50; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #66666C; }
+
+        .chat-bg {
+            background-color: #0B141A;
+            background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23162028' fill-opacity='0.6'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+
+        .message-out { background: #054640; }
+        .message-in  { background: #1E2D3A; }
+        .message-failed { background: #3A1A1A; border: 1px solid #F87171; }
+
+        .service-pulse { animation: servicePulse 2.5s ease-in-out infinite; }
+        @keyframes servicePulse {
+            0%,100% { box-shadow: 0 0 0 0 rgba(227,25,55,.35); }
+            50%      { box-shadow: 0 0 0 24px rgba(227,25,55,0); }
+        }
+
+        .fade-in { animation: fadeIn .3s ease-out; }
+        @keyframes fadeIn {
+            from { opacity:0; transform:translateY(10px); }
+            to   { opacity:1; transform:translateY(0); }
+        }
+
+        .sending-animation { animation: sendingPulse 1s ease-in-out infinite; }
+        @keyframes sendingPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+        .progress-bar { transition: width .3s ease; }
+
+        .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+        .status-connected    { background:#22C55E; box-shadow:0 0 6px #22C55E; }
+        .status-disconnected { background:#EF4444; box-shadow:0 0 6px #EF4444; }
+        .status-connecting   { background:#F59E0B; box-shadow:0 0 6px #F59E0B; animation:sendingPulse 1s infinite; }
+
+        .tooltip-custom { visibility:hidden; opacity:0; transition:all .2s; pointer-events:none; }
+        .tooltip-trigger:hover .tooltip-custom { visibility:visible; opacity:1; }
+
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance:none; }
+
+        .contact-item:hover .contact-actions { display:flex !important; }
+
+        .message-bubble {
+            max-width:65%; border-radius:8px;
+            padding:8px 12px; position:relative; word-wrap:break-word;
+        }
+        .message-bubble::before {
+            content:''; position:absolute; top:0;
+            width:0; height:0;
+        }
+        .message-out-wrapper .message-bubble::before {
+            right:-8px; border-left:8px solid #054640; border-bottom:8px solid transparent;
+        }
+        .message-in-wrapper .message-bubble::before {
+            left:-8px; border-right:8px solid #1E2D3A; border-bottom:8px solid transparent;
+        }
+
+        /* Unsaved contact indicator */
+        .unsaved-badge {
+            font-size:9px; background: #2A1A2A; color: #C084FC;
+            border: 1px solid #7E22CE; border-radius: 3px;
+            padding: 0 4px; line-height: 16px; vertical-align: middle;
+            margin-left: 4px; letter-spacing: 0.5px;
+        }
+
+        /* Bulk select bar */
+        #bulkBar { transition:all .3s ease; }
+
+        /* Checkbox custom style */
+        input[type=checkbox] { accent-color:#E31937; }
+
+        /* Message bubble hover */
+        .message-out-wrapper:hover .msg-time,
+        .message-in-wrapper:hover .msg-time { opacity:1 !important; }
+
+        /* Connecting spinner */
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Service icon ring */
+        .service-ring {
+            width: 120px; height: 120px; border-radius: 50%;
+            background: #1E1E24; border: 2px solid #3A3A40;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+        }
+
+        /* Dot grid background for connection screen */
+        .dot-grid {
+            background-image: radial-gradient(circle, #2A2A30 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-dark-950 text-white h-screen flex flex-col">
+
+<!-- ====== TOP BAR ====== -->
+<header class="bg-dark-900 border-b border-dark-700 px-4 py-2 flex items-center justify-between z-50 shrink-0">
+    <div class="flex items-center gap-3">
+        <div class="w-9 h-9 bg-shineray-500 rounded-lg flex items-center justify-center font-bold text-white text-sm tracking-tight">SY</div>
+        <div>
+            <h1 class="text-sm font-bold tracking-wide">SHINERAY DISPATCHER</h1>
+            <div class="flex items-center gap-1.5">
+                <span id="connectionStatus" class="status-dot status-disconnected"></span>
+                <span id="connectionText" class="text-[10px] text-dark-400">Desconectado</span>
+            </div>
+        </div>
+    </div>
+    <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 bg-dark-800 rounded-lg px-3 py-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E31937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            <span id="totalSent" class="text-xs font-semibold text-shineray-400">0</span>
+            <span class="text-[10px] text-dark-400">enviadas</span>
+        </div>
+        <div class="flex items-center gap-2 bg-dark-800 rounded-lg px-3 py-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            <span id="queueCount" class="text-xs font-semibold text-yellow-400">0</span>
+            <span class="text-[10px] text-dark-400">na fila</span>
+        </div>
+        <button onclick="toggleSettings()" class="p-2 rounded-lg hover:bg-dark-700 transition-colors relative tooltip-trigger">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="tooltip-custom absolute top-full right-0 mt-1 bg-dark-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">Configurações</span>
+        </button>
+        <button onclick="openImport()" class="p-2 rounded-lg hover:bg-dark-700 transition-colors relative tooltip-trigger">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span class="tooltip-custom absolute top-full right-0 mt-1 bg-dark-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">Importar Contatos</span>
+        </button>
+    </div>
+</header>
+
+<!-- ====== MAIN CONTENT ====== -->
+<div class="flex flex-1 overflow-hidden">
+
+    <!-- SIDEBAR -->
+    <aside id="sidebar" class="w-80 bg-dark-900 border-r border-dark-700 flex flex-col shrink-0">
+
+        <!-- Tabs -->
+        <div class="flex border-b border-dark-700">
+            <button onclick="switchTab('contacts')" id="tab-contacts" class="flex-1 py-3 text-xs font-semibold tracking-wide border-b-2 border-shineray-500 text-shineray-400 transition-all flex items-center justify-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                CONTATOS
+            </button>
+            <button onclick="switchTab('messages')" id="tab-messages" class="flex-1 py-3 text-xs font-semibold tracking-wide border-b-2 border-transparent text-dark-400 hover:text-dark-200 transition-all flex items-center justify-center gap-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                MENSAGENS
+            </button>
+            <button onclick="switchTab('queue')" id="tab-queue" class="flex-1 py-3 text-xs font-semibold tracking-wide border-b-2 border-transparent text-dark-400 hover:text-dark-200 transition-all flex items-center justify-center gap-1 relative">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                FILA
+                <span id="queueBadge" class="hidden absolute -top-0.5 right-1 bg-shineray-500 text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">0</span>
+            </button>
+        </div>
+
+        <!-- Search -->
+        <div class="p-3">
+            <div class="relative">
+                <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="searchInput" placeholder="Pesquisar..."
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500 transition-colors"
+                    oninput="handleSearch(this.value)">
+            </div>
+        </div>
+
+        <!-- === CONTACTS PANEL === -->
+        <div id="panel-contacts" class="flex-1 overflow-y-auto flex flex-col">
+            <div class="px-3 pb-2 flex gap-2">
+                <button onclick="openAddContact()" class="flex-1 flex items-center justify-center gap-1.5 bg-shineray-500/10 border border-shineray-500/30 text-shineray-400 rounded-lg py-2 text-xs font-semibold hover:bg-shineray-500/20 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    NOVO
+                </button>
+                <button onclick="selectAllContacts()" class="flex-1 flex items-center justify-center gap-1.5 bg-dark-800 border border-dark-700 text-dark-300 rounded-lg py-2 text-xs font-semibold hover:bg-dark-700 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span id="selectAllText">SEL. TODOS</span>
+                </button>
+            </div>
+
+            <!-- Bulk action bar -->
+            <div id="bulkBar" class="hidden mx-3 mb-2 bg-shineray-500/10 border border-shineray-500/30 rounded-lg px-3 py-2 flex items-center justify-between">
+                <span id="bulkCount" class="text-xs font-semibold text-shineray-400"></span>
+                <div class="flex gap-2">
+                    <button onclick="openScheduleForSelected()" class="text-xs bg-shineray-500 hover:bg-shineray-600 text-white px-3 py-1 rounded-lg font-semibold transition-colors">Agendar</button>
+                    <button onclick="deselectAll()" class="text-xs border border-dark-600 text-dark-300 px-3 py-1 rounded-lg font-semibold hover:bg-dark-700 transition-colors">Limpar</button>
+                </div>
+            </div>
+
+            <div id="contactsList" class="flex flex-col flex-1"></div>
+        </div>
+
+        <!-- === MESSAGES PANEL === -->
+        <div id="panel-messages" class="flex-1 overflow-y-auto hidden flex-col">
+            <div class="px-3 pb-2">
+                <button onclick="openAddMessage()" class="w-full flex items-center justify-center gap-1.5 bg-shineray-500/10 border border-shineray-500/30 text-shineray-400 rounded-lg py-2 text-xs font-semibold hover:bg-shineray-500/20 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    NOVA MENSAGEM
+                </button>
+            </div>
+            <div id="messagesList" class="flex flex-col gap-1 px-2"></div>
+        </div>
+
+        <!-- === QUEUE PANEL === -->
+        <div id="panel-queue" class="flex-1 overflow-y-auto hidden flex-col">
+            <div class="p-3">
+                <div class="bg-dark-800 rounded-lg p-3 mb-3">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-xs text-dark-400">Progresso da Fila</span>
+                        <span id="queueProgressText" class="text-xs font-semibold text-shineray-400">0%</span>
+                    </div>
+                    <div class="w-full h-2 bg-dark-700 rounded-full overflow-hidden">
+                        <div id="queueProgressBar" class="progress-bar h-full bg-gradient-to-r from-shineray-600 to-shineray-400 rounded-full" style="width:0%"></div>
+                    </div>
+                </div>
+                <div id="activeJobInfo" class="hidden bg-shineray-500/10 border border-shineray-500/30 rounded-lg p-3 mb-3">
+                    <div class="flex items-center gap-2 mb-1">
+                        <div class="w-2 h-2 bg-shineray-500 rounded-full sending-animation"></div>
+                        <span class="text-xs font-semibold text-shineray-400">Enviando agora</span>
+                    </div>
+                    <p id="activeJobName" class="text-sm font-medium text-white truncate"></p>
+                    <p id="activeJobPhone" class="text-xs text-dark-400 mt-0.5"></p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <span class="text-[10px] text-dark-400">Próxima em:</span>
+                        <span id="activeJobTimer" class="text-xs font-bold text-shineray-400">16s</span>
+                    </div>
+                </div>
+            </div>
+            <div id="queueList" class="flex flex-col gap-1 px-2 pb-2"></div>
+        </div>
+
+        <!-- Start/Stop Button -->
+        <div class="p-3 border-t border-dark-700">
+            <button id="startBtn" onclick="toggleDispatch()"
+                class="w-full py-3 rounded-lg font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 bg-shineray-500 hover:bg-shineray-600 text-white">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                INICIAR DISPARO
+            </button>
+        </div>
+    </aside>
+
+    <!-- ====== MAIN AREA ====== -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- CONNECTION SCREEN -->
+        <div id="connectionScreen" class="flex-1 flex items-center justify-center bg-dark-950 dot-grid">
+            <div class="text-center">
+
+                <!-- Ícone animado -->
+                <div class="relative inline-block mb-8">
+                    <div class="service-pulse service-ring mx-auto">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#E31937" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <!-- Status rings -->
+                    <div class="absolute -top-1 -right-1 w-6 h-6 bg-dark-900 rounded-full border-2 border-dark-700 flex items-center justify-center" id="connIconStatus">
+                        <span class="w-2.5 h-2.5 rounded-full bg-red-500 block"></span>
+                    </div>
+                </div>
+
+                <h2 class="text-xl font-bold mb-2">Serviço Local</h2>
+                <p class="text-dark-400 text-sm max-w-sm mb-1 mx-auto">
+                    Para enviar mensagens reais via CallMeBot, o serviço local precisa estar ativo.
+                </p>
+                <div class="bg-dark-800 border border-dark-700 rounded-lg px-4 py-2 text-xs font-mono text-green-400 mb-6 inline-block">
+                    $ node webservice.js
+                </div>
+
+                <div class="flex flex-col items-center gap-3">
+                    <button id="connectBtn" onclick="connectToService()"
+                        class="bg-shineray-500 hover:bg-shineray-600 text-white px-8 py-3 rounded-xl font-bold text-sm transition-colors inline-flex items-center gap-2 shadow-lg shadow-shineray-500/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                        Verificar Serviço
+                    </button>
+                    <p id="connectHint" class="text-dark-600 text-[10px]">Requer webservice.js ativo na porta 3000</p>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- CHAT SCREEN -->
+        <div id="chatScreen" class="flex-1 flex flex-col overflow-hidden hidden">
+
+            <!-- Chat Header -->
+            <div class="bg-dark-900 border-b border-dark-700 px-4 py-2.5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div id="chatAvatar" class="w-10 h-10 bg-dark-700 rounded-full flex items-center justify-center text-sm font-bold text-dark-300">?</div>
+                    <div>
+                        <h3 id="chatName" class="text-sm font-semibold">Selecione um contato</h3>
+                        <p id="chatPhone" class="text-xs text-dark-400"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="openScheduleForContact_header()" class="p-2 rounded-lg hover:bg-dark-700 transition-colors relative tooltip-trigger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><circle cx="12" cy="16" r="1"/></svg>
+                        <span class="tooltip-custom absolute top-full right-0 mt-1 bg-dark-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">Agendar envio</span>
+                    </button>
+                    <button onclick="focusMessageInput()" class="p-2 rounded-lg hover:bg-dark-700 transition-colors relative tooltip-trigger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        <span class="tooltip-custom absolute top-full right-0 mt-1 bg-dark-700 text-xs px-2 py-1 rounded whitespace-nowrap z-10">Envio rápido</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Messages Area -->
+            <div id="chatMessages" class="flex-1 overflow-y-auto chat-bg p-4 flex flex-col">
+                <div class="flex items-center justify-center flex-1">
+                    <div class="text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#3A3A40" stroke-width="1.5" class="mx-auto mb-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        <p class="text-dark-500 text-sm">Selecione um contato para ver as mensagens</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="bg-dark-900 border-t border-dark-700 p-3">
+                <div class="flex items-end gap-2">
+                    <button onclick="insertEmoji()" class="p-2 rounded-lg hover:bg-dark-700 transition-colors shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 13s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                    </button>
+                    <div class="flex-1 relative">
+                        <textarea id="messageInput" rows="1" placeholder="Digite uma mensagem..."
+                            class="w-full bg-dark-800 border border-dark-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500 resize-none max-h-32 transition-colors"
+                            onkeydown="handleInputKeydown(event)" oninput="autoResizeTextarea(this)"></textarea>
+                    </div>
+                    <button onclick="sendMessage()" class="bg-shineray-500 hover:bg-shineray-600 p-2.5 rounded-lg transition-colors shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- ====== MODALS ====== -->
+
+<!-- Add Contact Modal -->
+<div id="addContactModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md mx-4 fade-in overflow-hidden">
+        <div class="p-5 border-b border-dark-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg">Novo Contato</h3>
+            <button onclick="closeAddContact()" class="p-1.5 rounded-lg hover:bg-dark-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Nome *</label>
+                <input type="text" id="contactName" placeholder="Nome do contato"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500">
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Telefone *</label>
+                <input type="text" id="contactPhone" placeholder="5511999999999"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500">
+                <p class="text-[10px] text-dark-500 mt-1">Inclua DDI. Ex: 55 para Brasil → 5516999999999</p>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Tags (separadas por vírgula)</label>
+                <input type="text" id="contactTags" placeholder="cliente, lead, shineray"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500">
+            </div>
+            <div class="bg-dark-800 border border-purple-900/40 rounded-lg p-3 text-xs text-dark-400">
+                <p class="text-purple-400 font-semibold mb-1">💡 Contato salvo vs não salvo</p>
+                <p>Números em <code class="text-green-400">contacts.json</code> aparecem normalmente. Números adicionados só aqui aparecem como <span class="text-purple-300">~Nome</span> — igual ao WhatsApp.</p>
+            </div>
+        </div>
+        <div class="p-5 border-t border-dark-700 flex gap-2">
+            <button onclick="closeAddContact()" class="flex-1 py-2.5 rounded-lg border border-dark-700 text-sm font-semibold hover:bg-dark-800 transition-colors">Cancelar</button>
+            <button onclick="saveContact()" class="flex-1 py-2.5 rounded-lg bg-shineray-500 hover:bg-shineray-600 text-white text-sm font-semibold transition-colors">Salvar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Add Message Modal -->
+<div id="addMessageModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md mx-4 fade-in overflow-hidden">
+        <div class="p-5 border-b border-dark-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg">Nova Mensagem Template</h3>
+            <button onclick="closeAddMessage()" class="p-1.5 rounded-lg hover:bg-dark-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Título *</label>
+                <input type="text" id="msgTitle" placeholder="Nome do template"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500">
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Conteúdo *</label>
+                <textarea id="msgContent" rows="5" placeholder="Olá {nome}! Temos uma promoção Shineray especial para você..."
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500 resize-none"></textarea>
+                <p class="text-[10px] text-dark-500 mt-1">Use <span class="text-shineray-400">{nome}</span> para personalizar com o nome do contato</p>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Categoria</label>
+                <select id="msgCategory" class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500">
+                    <option value="promocao">🔥 Promoção</option>
+                    <option value="boleto">💳 Lembrete de Boleto</option>
+                    <option value="posvenda">🔧 Pós-venda</option>
+                    <option value="aniversario">🎉 Aniversário</option>
+                    <option value="novidade">🚀 Novidade</option>
+                    <option value="outro">📌 Outro</option>
+                </select>
+            </div>
+        </div>
+        <div class="p-5 border-t border-dark-700 flex gap-2">
+            <button onclick="closeAddMessage()" class="flex-1 py-2.5 rounded-lg border border-dark-700 text-sm font-semibold hover:bg-dark-800 transition-colors">Cancelar</button>
+            <button onclick="saveMessage()" class="flex-1 py-2.5 rounded-lg bg-shineray-500 hover:bg-shineray-600 text-white text-sm font-semibold transition-colors">Salvar Template</button>
+        </div>
+    </div>
+</div>
+
+<!-- Schedule Modal -->
+<div id="scheduleModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md mx-4 fade-in overflow-hidden">
+        <div class="p-5 border-b border-dark-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg">Agendar Disparo</h3>
+            <button onclick="closeSchedule()" class="p-1.5 rounded-lg hover:bg-dark-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Template de Mensagem</label>
+                <select id="scheduleMsg" class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500"></select>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Delay entre mensagens (segundos)</label>
+                <input type="number" id="scheduleDelay" value="16" min="16" max="300"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500">
+                <p class="text-[10px] text-shineray-400 mt-1">⚠ Mínimo 16s para evitar bloqueio</p>
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-xs text-dark-300 font-medium">Delay aleatório</label>
+                    <p class="text-[10px] text-dark-500">+0 a 10s extra por mensagem (mais humano)</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="randomDelay" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-dark-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-shineray-500"></div>
+                </label>
+            </div>
+            <div class="bg-dark-800 rounded-lg p-3">
+                <p class="text-xs text-dark-400 mb-1">Destinatários</p>
+                <p id="scheduleContactCount" class="text-sm font-semibold text-white">0 contatos</p>
+                <div id="scheduleContactPreview" class="flex flex-wrap gap-1 mt-2"></div>
+            </div>
+        </div>
+        <div class="p-5 border-t border-dark-700 flex gap-2">
+            <button onclick="closeSchedule()" class="flex-1 py-2.5 rounded-lg border border-dark-700 text-sm font-semibold hover:bg-dark-800 transition-colors">Cancelar</button>
+            <button onclick="addToQueue()" class="flex-1 py-2.5 rounded-lg bg-shineray-500 hover:bg-shineray-600 text-white text-sm font-semibold transition-colors">Adicionar à Fila</button>
+        </div>
+    </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsPanel" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md mx-4 fade-in overflow-hidden">
+        <div class="p-5 border-b border-dark-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg">Configurações</h3>
+            <button onclick="toggleSettings()" class="p-1.5 rounded-lg hover:bg-dark-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5 space-y-5">
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Delay padrão (segundos)</label>
+                <input type="number" id="defaultDelay" value="16" min="16" max="300"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500">
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-xs text-dark-300 font-medium">Delay aleatório adicional</label>
+                    <p class="text-[10px] text-dark-500">+0 a 10s por mensagem</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="settingsRandomDelay" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-dark-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-shineray-500"></div>
+                </label>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Máximo por sessão</label>
+                <input type="number" id="maxPerSession" value="100" min="1" max="1000"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500">
+            </div>
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-xs text-dark-300 font-medium">Parar ao atingir limite</label>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="stopOnLimit" class="sr-only peer" checked>
+                    <div class="w-9 h-5 bg-dark-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-shineray-500"></div>
+                </label>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Ação em caso de erro</label>
+                <select id="onError" class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-shineray-500">
+                    <option value="skip">Pular e continuar</option>
+                    <option value="retry">Tentar novamente (1x)</option>
+                    <option value="stop">Parar execução</option>
+                </select>
+            </div>
+        </div>
+        <div class="p-5 border-t border-dark-700">
+            <button onclick="saveSettings()" class="w-full py-2.5 rounded-lg bg-shineray-500 hover:bg-shineray-600 text-white text-sm font-semibold transition-colors">Salvar Configurações</button>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div id="importModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center hidden">
+    <div class="bg-dark-900 border border-dark-700 rounded-2xl w-full max-w-md mx-4 fade-in overflow-hidden">
+        <div class="p-5 border-b border-dark-700 flex items-center justify-between">
+            <h3 class="font-bold text-lg">Importar Contatos</h3>
+            <button onclick="closeImport()" class="p-1.5 rounded-lg hover:bg-dark-700">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="p-5 space-y-4">
+            <div class="bg-dark-800 border border-dark-700 rounded-lg p-3 text-xs text-dark-400 space-y-1">
+                <p class="font-semibold text-dark-300">Formatos aceitos:</p>
+                <p>• <span class="text-green-400">Nome;Telefone</span> — padrão</p>
+                <p>• <span class="text-green-400">Nome;Telefone;tag1,tag2</span> — com tags</p>
+                <p>• <span class="text-green-400">5511999999999</span> — só número (DDI obrigatório)</p>
+            </div>
+            <div>
+                <label class="text-xs text-dark-400 font-medium mb-1 block">Cole os contatos (um por linha)</label>
+                <textarea id="importData" rows="8"
+                    placeholder="João Silva;5511999990001;cliente,shineray&#10;Maria;5511988880002;lead&#10;5521977770003"
+                    class="w-full bg-dark-800 border border-dark-700 rounded-lg px-3 py-2.5 text-sm text-white placeholder-dark-400 focus:outline-none focus:border-shineray-500 resize-none font-mono"></textarea>
+            </div>
+        </div>
+        <div class="p-5 border-t border-dark-700 flex gap-2">
+            <button onclick="closeImport()" class="flex-1 py-2.5 rounded-lg border border-dark-700 text-sm font-semibold hover:bg-dark-800 transition-colors">Cancelar</button>
+            <button onclick="importContacts()" class="flex-1 py-2.5 rounded-lg bg-shineray-500 hover:bg-shineray-600 text-white text-sm font-semibold transition-colors">Importar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-4 right-4 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <div class="bg-dark-800 border border-dark-700 rounded-xl px-4 py-3 flex items-center gap-3 shadow-2xl max-w-sm">
+        <div id="toastIcon" class="shrink-0"></div>
+        <div>
+            <p id="toastTitle" class="text-sm font-semibold"></p>
+            <p id="toastMessage" class="text-xs text-dark-400 mt-0.5"></p>
+        </div>
+    </div>
+</div>
+
+<!-- ====== APPLICATION SCRIPT ====== -->
+<script>
+// ========================================
+// STATE
+// ========================================
+const AppState = {
+    connected          : false,
+    contacts           : [],
+    messages           : [],
+    queue              : [],
+    chatHistory        : {},
+    selectedContact    : null,
+    dispatching        : false,
+    sentCount          : 0,
+    timerInterval      : null,
+    scheduleTargetContacts: [],
+    savedPhones        : new Set(), // phones present in contacts.json (server)
+};
+
+// ========================================
+// INIT
+// ========================================
+document.addEventListener('DOMContentLoaded', () => {
+    loadFromStorage();
+    renderContacts();
+    renderMessages();
+    updateStats();
+    if (AppState.contacts.length === 0) setupSampleData();
+    // Try auto-connect silently
+    connectToService(true);
+});
+
+function setupSampleData() {
+    AppState.contacts = [
+        { id: genId(), name: 'João Silva',      phone: '5511999990001', tags: ['cliente','shineray'], selected: false },
+        { id: genId(), name: 'Maria Oliveira',  phone: '5511988880002', tags: ['lead'],                selected: false },
+        { id: genId(), name: 'Carlos Santos',   phone: '5521977770003', tags: ['cliente','posvenda'],  selected: false },
+        { id: genId(), name: 'Ana Paula',       phone: '5531966660004', tags: ['lead','shineray'],     selected: false },
+        { id: genId(), name: 'Roberto Lima',    phone: '5511955550005', tags: ['cliente'],             selected: false },
+        { id: genId(), name: 'Fernanda Costa',  phone: '5541944440006', tags: ['aniversario'],         selected: false },
+        { id: genId(), name: 'Pedro Almeida',   phone: '5511933330007', tags: ['lead','shineray'],     selected: false },
+        { id: genId(), name: 'Lucia Ferreira',  phone: '5551922220008', tags: ['cliente'],             selected: false },
+    ];
+    AppState.messages = [
+        { id: genId(), title: 'Promoção Shineray',  content: 'Olá {nome}! 🏍️ Temos uma promoção imperdível na linha Shineray 2024! Moto com até 30% de desconto. Vem aproveitar! 🔥',           category: 'promocao'   },
+        { id: genId(), title: 'Lembrete de Boleto', content: 'Olá {nome}, seu boleto vence em 3 dias. Acesse o link para realizar o pagamento e mantenha seu plano em dia! 💳',                   category: 'boleto'     },
+        { id: genId(), title: 'Pós-venda',          content: 'Oi {nome}! Aqui é da Shineray. Como está sua moto? Tudo certo? Se precisar de revisão, agende com a gente! 😊🔧',                  category: 'posvenda'   },
+        { id: genId(), title: 'Feliz Aniversário',  content: '🎉 Feliz aniversário, {nome}! A Shineray deseja tudo de bom pra você! Venha comemorar e ganhe um desconto especial! 🎂',            category: 'aniversario'},
+        { id: genId(), title: 'Novo Modelo',        content: '🚀 {nome}, chegou o NOVO modelo Shineray! Design moderno e potência de sobra. Quer conhecer? Agende um test ride!',                 category: 'novidade'   },
+    ];
+    saveToStorage();
+    renderContacts();
+    renderMessages();
+}
+
+// ========================================
+// UTILS
+// ========================================
+function genId() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 9); }
+
+function formatPhone(p) {
+    p = p.replace(/\D/g,'');
+    if (p.length >= 12) return `+${p.slice(0,2)} (${p.slice(2,4)}) ${p.slice(4,9)}-${p.slice(9,13)}`;
+    if (p.length === 11) return `(${p.slice(0,2)}) ${p.slice(2,7)}-${p.slice(7)}`;
+    return p;
+}
+
+function getInitials(name) {
+    return name.split(' ').filter(Boolean).map(n=>n[0]).join('').substring(0,2).toUpperCase();
+}
+
+/**
+ * Retorna o nome a exibir do contato.
+ * Se o telefone NÃO estiver no contacts.json (savedPhones), retorna ~Nome (estilo WhatsApp).
+ */
+function getDisplayName(contact) {
+    if (!AppState.connected || !AppState.savedPhones.size) return contact.name;
+    const phone = contact.phone.replace(/\D/g, '');
+    return AppState.savedPhones.has(phone) ? contact.name : `~${contact.name}`;
+}
+
+function isSaved(contact) {
+    if (!AppState.connected) return true;
+    return AppState.savedPhones.has(contact.phone.replace(/\D/g, ''));
+}
+
+// ========================================
+// STORAGE — debounced, com trim de histórico
+// ========================================
+let _saveTimer = null;
+
+function saveToStorage() {
+    // Trim chatHistory: máx 50 mensagens por contato
+    const trimmedHistory = {};
+    Object.keys(AppState.chatHistory).forEach(id => {
+        const msgs = AppState.chatHistory[id];
+        trimmedHistory[id] = msgs.length > 50 ? msgs.slice(-50) : msgs;
+    });
+    AppState.chatHistory = trimmedHistory;
+
+    try {
+        localStorage.setItem('shineray_data', JSON.stringify({
+            contacts   : AppState.contacts,
+            messages   : AppState.messages,
+            chatHistory: AppState.chatHistory,
+            sentCount  : AppState.sentCount,
+        }));
+    } catch(e) { console.warn('localStorage cheio:', e); }
+
+    // Sincronizar contatos com o servidor (debounced 2s)
+    if (_saveTimer) clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(async () => {
+        if (!AppState.connected) return;
+        try {
+            await fetch('/api/contacts', {
+                method : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body   : JSON.stringify(AppState.contacts.map(c => ({
+                    name : c.name,
+                    phone: c.phone,
+                    tags : c.tags || [],
+                }))),
+            });
+        } catch(e) { /* servidor offline, ignora */ }
+    }, 2000);
+}
+
+function loadFromStorage() {
+    try {
+        const d = JSON.parse(localStorage.getItem('shineray_data'));
+        if (d) {
+            AppState.contacts    = d.contacts    || [];
+            AppState.messages    = d.messages    || [];
+            AppState.chatHistory = d.chatHistory || {};
+            AppState.sentCount   = d.sentCount   || 0;
+        }
+    } catch(e) {}
+}
+
+// ========================================
+// CONEXÃO AO SERVIÇO LOCAL
+// ========================================
+async function connectToService(silent = false) {
+    const statusEl  = document.getElementById('connectionStatus');
+    const textEl    = document.getElementById('connectionText');
+    const connectBtn= document.getElementById('connectBtn');
+    const hint      = document.getElementById('connectHint');
+    const iconDot   = document.getElementById('connIconStatus');
+
+    if (!silent) {
+        statusEl.className = 'status-dot status-connecting';
+        textEl.textContent = 'Verificando...';
+        if (connectBtn) {
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = `<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Verificando...`;
+        }
+    }
+
+    try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 5000);
+        const res  = await fetch('/api/status', { signal: controller.signal });
+        clearTimeout(tid);
+        const data = await res.json();
+
+        if (data.ok) {
+            AppState.connected   = true;
+            AppState.savedPhones = new Set((data.savedPhones || []).map(p => p.replace(/\D/g, '')));
+
+            statusEl.className  = 'status-dot status-connected';
+            textEl.textContent  = 'Serviço ativo';
+            if (iconDot) iconDot.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-green-500 block"></span>';
+
+            document.getElementById('connectionScreen').classList.add('hidden');
+            document.getElementById('chatScreen').classList.remove('hidden');
+
+            await loadContactsFromServer();
+            renderContacts(); // re-render com ~nome calculado
+
+            if (!silent) {
+                showToast('success', 'Serviço conectado!',
+                    `CallMeBot ativo • ${data.totalContacts} contatos na agenda`);
+            }
+        } else {
+            throw new Error('status not ok');
+        }
+    } catch(e) {
+        AppState.connected = false;
+        statusEl.className = 'status-dot status-disconnected';
+        textEl.textContent = 'Desconectado';
+        if (iconDot) iconDot.innerHTML = '<span class="w-2.5 h-2.5 rounded-full bg-red-500 block"></span>';
+
+        if (connectBtn) {
+            connectBtn.disabled = false;
+            connectBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Verificar Serviço`;
+        }
+
+        if (!silent) {
+            if (hint) hint.textContent = '❌ Serviço não encontrado. Execute: node webservice.js';
+            showToast('error', 'Serviço offline', 'Execute: node webservice.js');
+        }
+    }
+}
+
+async function loadContactsFromServer() {
+    try {
+        const res = await fetch('/api/contacts');
+        if (!res.ok) return;
+        const serverContacts = await res.json();
+
+        // Atualiza savedPhones
+        AppState.savedPhones = new Set(serverContacts.map(c => c.phone.replace(/\D/g, '')));
+
+        // Se não há contatos locais, importa do servidor
+        if (AppState.contacts.length === 0 && serverContacts.length > 0) {
+            AppState.contacts = serverContacts.map(c => ({
+                id      : genId(),
+                name    : c.name,
+                phone   : c.phone.replace(/\D/g, ''),
+                tags    : c.tags || [],
+                selected: false,
+            }));
+            saveToStorage();
+        }
+    } catch(e) {
+        console.warn('Não foi possível carregar contatos do servidor:', e);
+    }
+}
+
+// ========================================
+// API — envio real via webservice.js
+// ========================================
+async function sendViaWebservice(phone, text) {
+    try {
+        const res = await fetch('/api/send', {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body   : JSON.stringify({ phone, text }),
+        });
+        const data = await res.json();
+        return data;
+    } catch(e) {
+        return { ok: false, error: e.message };
+    }
+}
+
+// ========================================
+// CONTACTS
+// ========================================
+function renderContacts() {
+    const container = document.getElementById('contactsList');
+    const search    = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    let contacts    = AppState.contacts;
+    if (search) {
+        contacts = contacts.filter(c =>
+            c.name.toLowerCase().includes(search) ||
+            c.phone.includes(search) ||
+            c.tags.some(t => t.toLowerCase().includes(search))
+        );
+    }
+
+    const selectedAll   = AppState.contacts.length > 0 && AppState.contacts.every(c=>c.selected);
+    document.getElementById('selectAllText').textContent = selectedAll ? 'DESSEL. TODOS' : 'SEL. TODOS';
+
+    const selectedCount = AppState.contacts.filter(c=>c.selected).length;
+    const bulkBar       = document.getElementById('bulkBar');
+    if (selectedCount > 0) {
+        bulkBar.classList.remove('hidden');
+        bulkBar.classList.add('flex');
+        document.getElementById('bulkCount').textContent = `${selectedCount} selecionado${selectedCount>1?'s':''}`;
+    } else {
+        bulkBar.classList.add('hidden');
+        bulkBar.classList.remove('flex');
+    }
+
+    if (contacts.length === 0) {
+        container.innerHTML = `
+            <div class="p-8 text-center flex-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3A3A40" stroke-width="1.5" class="mx-auto mb-3"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <p class="text-dark-500 text-sm">Nenhum contato encontrado</p>
+                <button onclick="openImport()" class="mt-3 text-xs text-shineray-400 hover:text-shineray-300">Importar contatos</button>
+            </div>`;
+    } else {
+        container.innerHTML = contacts.map(c => {
+            const displayName = getDisplayName(c);
+            const saved       = isSaved(c);
+            const avatarBg    = c.selected ? 'bg-shineray-500' : (saved ? 'bg-dark-700' : 'bg-purple-900/40');
+            const avatarTxt   = c.selected ? 'text-white'      : (saved ? 'text-dark-300'  : 'text-purple-300');
+            return `
+            <div class="contact-item group flex items-center gap-3 px-3 py-2.5 hover:bg-dark-800 cursor-pointer transition-colors ${AppState.selectedContact?.id === c.id ? 'bg-dark-800' : ''}"
+                 onclick="selectContact('${c.id}')">
+                <input type="checkbox" ${c.selected ? 'checked' : ''}
+                    onclick="event.stopPropagation(); toggleContact('${c.id}')"
+                    class="w-4 h-4 rounded cursor-pointer shrink-0">
+                <div class="w-9 h-9 rounded-full ${avatarBg} flex items-center justify-center text-xs font-bold ${avatarTxt} shrink-0 transition-colors">
+                    ${getInitials(c.name)}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-sm font-medium truncate">
+                        ${escapeHtml(displayName)}
+                        ${!saved && AppState.connected ? '<span class="unsaved-badge">não salvo</span>' : ''}
+                    </p>
+                    <p class="text-xs text-dark-400 truncate">${formatPhone(c.phone)}</p>
+                    <div class="flex gap-1 mt-0.5 flex-wrap">
+                        ${c.tags.map(t=>`<span class="text-[10px] bg-dark-700 text-dark-300 px-1.5 py-0.5 rounded">${t}</span>`).join('')}
+                    </div>
+                </div>
+                <div class="contact-actions hidden items-center gap-1 shrink-0">
+                    <button onclick="event.stopPropagation(); openScheduleForContact('${c.id}')" class="p-1.5 rounded hover:bg-dark-600" title="Agendar">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </button>
+                    <button onclick="event.stopPropagation(); deleteContact('${c.id}')" class="p-1.5 rounded hover:bg-dark-600" title="Remover">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    const queueItems = AppState.queue.reduce((a,q)=>a+q.contacts.length,0);
+    const badge      = document.getElementById('queueBadge');
+    if (queueItems > 0) {
+        badge.classList.remove('hidden'); badge.classList.add('flex');
+        badge.textContent = queueItems > 99 ? '99+' : queueItems;
+    } else {
+        badge.classList.add('hidden'); badge.classList.remove('flex');
+    }
+}
+
+function openAddContact()  { document.getElementById('addContactModal').classList.remove('hidden'); }
+function closeAddContact() {
+    document.getElementById('addContactModal').classList.add('hidden');
+    document.getElementById('contactName').value  = '';
+    document.getElementById('contactPhone').value = '';
+    document.getElementById('contactTags').value  = '';
+}
+
+function saveContact() {
+    const name  = document.getElementById('contactName').value.trim();
+    const phone = document.getElementById('contactPhone').value.trim().replace(/\D/g,'');
+    const tags  = document.getElementById('contactTags').value.trim().split(',').map(t=>t.trim()).filter(Boolean);
+    if (!name || !phone) { showToast('error','Campos obrigatórios','Preencha nome e telefone'); return; }
+    AppState.contacts.push({ id: genId(), name, phone, tags, selected: false });
+    saveToStorage(); renderContacts(); closeAddContact();
+    showToast('success', 'Contato adicionado', `${getDisplayName({name, phone})} foi salvo`);
+}
+
+function deleteContact(id) {
+    const c = AppState.contacts.find(c=>c.id===id);
+    if (!c) return;
+    if (!confirm(`Remover ${c.name}?`)) return;
+    AppState.contacts = AppState.contacts.filter(c=>c.id!==id);
+    if (AppState.selectedContact?.id === id) { AppState.selectedContact = null; updateChatView(); }
+    saveToStorage(); renderContacts();
+    showToast('info','Contato removido',`${c.name} removido`);
+}
+
+function toggleContact(id) {
+    const c = AppState.contacts.find(c=>c.id===id);
+    if (c) { c.selected = !c.selected; saveToStorage(); renderContacts(); }
+}
+
+function selectAllContacts() {
+    const all = AppState.contacts.every(c=>c.selected);
+    AppState.contacts.forEach(c=>c.selected=!all);
+    saveToStorage(); renderContacts();
+}
+
+function deselectAll() {
+    AppState.contacts.forEach(c=>c.selected=false);
+    saveToStorage(); renderContacts();
+}
+
+function selectContact(id) {
+    AppState.selectedContact = AppState.contacts.find(c=>c.id===id) || null;
+    renderContacts();
+    updateChatView();
+}
+
+function updateChatView() {
+    const c = AppState.selectedContact;
+    if (!c) {
+        document.getElementById('chatName').textContent   = 'Selecione um contato';
+        document.getElementById('chatPhone').textContent  = '';
+        document.getElementById('chatAvatar').textContent = '?';
+        document.getElementById('chatAvatar').className   = 'w-10 h-10 bg-dark-700 rounded-full flex items-center justify-center text-sm font-bold text-dark-300';
+        document.getElementById('chatMessages').innerHTML = `
+            <div class="flex items-center justify-center flex-1">
+                <div class="text-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#3A3A40" stroke-width="1.5" class="mx-auto mb-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <p class="text-dark-500 text-sm">Selecione um contato para ver as mensagens</p>
+                </div>
+            </div>`;
+        return;
+    }
+    const displayName = getDisplayName(c);
+    document.getElementById('chatName').textContent   = displayName;
+    document.getElementById('chatPhone').textContent  = formatPhone(c.phone);
+    document.getElementById('chatAvatar').textContent = getInitials(c.name);
+    document.getElementById('chatAvatar').className   =
+        `w-10 h-10 ${isSaved(c) ? 'bg-shineray-500' : 'bg-purple-800'} rounded-full flex items-center justify-center text-sm font-bold text-white`;
+    loadChatMessages();
+}
+
+function loadChatMessages() {
+    const c       = AppState.selectedContact;
+    if (!c) return;
+    const history = AppState.chatHistory[c.id] || [];
+    const chatEl  = document.getElementById('chatMessages');
+
+    if (history.length === 0) {
+        chatEl.innerHTML = `
+            <div class="flex items-center justify-center flex-1">
+                <div class="text-center">
+                    <p class="text-dark-500 text-sm">Nenhuma mensagem com ${escapeHtml(getDisplayName(c))}</p>
+                    <p class="text-dark-600 text-xs mt-1">Envie uma mensagem ou agende uma campanha</p>
+                </div>
+            </div>`;
+        return;
+    }
+
+    chatEl.innerHTML = history.map(msg => {
+        const time    = new Date(msg.timestamp).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+        const content = escapeHtml(msg.content).replace(/\n/g,'<br>');
+        if (msg.type === 'out') {
+            const isFailed   = msg.status === 'failed';
+            const isSending  = msg.status === 'sending';
+            const bubbleCls  = isFailed ? 'message-failed' : 'message-out';
+            const statusIcon = isFailed ? '✗' : (isSending ? '🕐' : '✓');
+            const statusCls  = isFailed ? 'text-red-400' : 'text-green-300';
+            return `<div class="flex justify-end mb-2 message-out-wrapper fade-in">
+                <div class="message-bubble ${bubbleCls}">
+                    <p class="text-sm text-white leading-relaxed">${content}</p>
+                    <div class="flex items-center justify-end gap-1 mt-1">
+                        <span class="text-[10px] text-green-200">${time}</span>
+                        <span class="text-[10px] ${statusCls}">${statusIcon}</span>
+                        ${isFailed ? '<span class="text-[9px] text-red-400">falha</span>' : ''}
+                    </div>
+                </div>
+            </div>`;
+        } else {
+            return `<div class="flex justify-start mb-2 message-in-wrapper fade-in">
+                <div class="message-bubble message-in">
+                    <p class="text-sm text-white leading-relaxed">${content}</p>
+                    <span class="text-[10px] text-dark-400 mt-1 block text-right">${time}</span>
+                </div>
+            </div>`;
+        }
+    }).join('');
+    chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function escapeHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ========================================
+// MESSAGES (TEMPLATES)
+// ========================================
+function renderMessages() {
+    const container = document.getElementById('messagesList');
+    const search    = (document.getElementById('searchInput')?.value || '').toLowerCase();
+    let messages    = AppState.messages;
+    if (search) messages = messages.filter(m => m.title.toLowerCase().includes(search) || m.content.toLowerCase().includes(search));
+
+    const catColors = {
+        promocao:   'bg-shineray-500/20 text-shineray-400',
+        boleto:     'bg-yellow-500/20 text-yellow-400',
+        posvenda:   'bg-blue-500/20 text-blue-400',
+        aniversario:'bg-purple-500/20 text-purple-400',
+        novidade:   'bg-green-500/20 text-green-400',
+        outro:      'bg-dark-600/50 text-dark-300',
+    };
+    const catLabels = { promocao:'Promoção', boleto:'Boleto', posvenda:'Pós-venda', aniversario:'Aniversário', novidade:'Novidade', outro:'Outro' };
+
+    if (messages.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3A3A40" stroke-width="1.5" class="mx-auto mb-3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><p class="text-dark-500 text-sm">Nenhum template criado</p></div>`;
+    } else {
+        container.innerHTML = messages.map(m => `
+            <div class="bg-dark-800 rounded-lg p-3 hover:bg-dark-700 cursor-pointer transition-colors group mb-1" onclick="previewMessage('${m.id}')">
+                <div class="flex items-center justify-between mb-1.5">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="${catColors[m.category]||catColors.outro} text-[10px] font-semibold px-2 py-0.5 rounded shrink-0">${catLabels[m.category]||'Outro'}</span>
+                        <h4 class="text-sm font-medium truncate">${escapeHtml(m.title)}</h4>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="event.stopPropagation(); openScheduleForTemplate('${m.id}')" class="p-1 opacity-0 group-hover:opacity-100 rounded hover:bg-dark-600 transition-opacity" title="Agendar">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#66666C" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteMessage('${m.id}')" class="p-1 opacity-0 group-hover:opacity-100 rounded hover:bg-dark-600 transition-opacity">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <p class="text-xs text-dark-400 line-clamp-2">${escapeHtml(m.content.substring(0,100))}${m.content.length>100?'...':''}</p>
+            </div>`).join('');
+    }
+
+    const sel = document.getElementById('scheduleMsg');
+    if (sel) sel.innerHTML = AppState.messages.map(m=>`<option value="${m.id}">${escapeHtml(m.title)}</option>`).join('');
+}
+
+function openAddMessage()  { document.getElementById('addMessageModal').classList.remove('hidden'); }
+function closeAddMessage() {
+    document.getElementById('addMessageModal').classList.add('hidden');
+    document.getElementById('msgTitle').value   = '';
+    document.getElementById('msgContent').value = '';
+    document.getElementById('msgCategory').value= 'promocao';
+}
+
+function saveMessage() {
+    const title    = document.getElementById('msgTitle').value.trim();
+    const content  = document.getElementById('msgContent').value.trim();
+    const category = document.getElementById('msgCategory').value;
+    if (!title||!content) { showToast('error','Campos obrigatórios','Preencha título e conteúdo'); return; }
+    AppState.messages.push({ id:genId(), title, content, category });
+    saveToStorage(); renderMessages(); closeAddMessage();
+    showToast('success','Template salvo',`"${title}" adicionado`);
+}
+
+function deleteMessage(id) {
+    const m = AppState.messages.find(m=>m.id===id);
+    if (!m || !confirm(`Remover template "${m.title}"?`)) return;
+    AppState.messages = AppState.messages.filter(m=>m.id!==id);
+    saveToStorage(); renderMessages();
+    showToast('info','Template removido',`"${m.title}" removido`);
+}
+
+function previewMessage(id) {
+    const msg = AppState.messages.find(m=>m.id===id);
+    if (!msg) return;
+    if (!AppState.selectedContact) { showToast('warning','Selecione um contato','Clique em um contato primeiro'); return; }
+    const input = document.getElementById('messageInput');
+    input.value = msg.content;
+    autoResizeTextarea(input);
+    input.focus();
+}
+
+// ========================================
+// SCHEDULE
+// ========================================
+function openScheduleForSelected() {
+    const selected = AppState.contacts.filter(c=>c.selected);
+    if (selected.length === 0) { showToast('warning','Nenhum selecionado','Marque contatos antes'); return; }
+    AppState.scheduleTargetContacts = selected.map(c=>({...c}));
+    populateScheduleModal();
+    document.getElementById('scheduleModal').classList.remove('hidden');
+}
+
+function openScheduleForContact(contactId) {
+    const c = AppState.contacts.find(ct=>ct.id===contactId);
+    if (!c) return;
+    AppState.scheduleTargetContacts = [{...c}];
+    populateScheduleModal();
+    document.getElementById('scheduleModal').classList.remove('hidden');
+}
+
+function openScheduleForContact_header() {
+    if (!AppState.selectedContact) { showToast('warning','Nenhum contato','Selecione um contato primeiro'); return; }
+    AppState.scheduleTargetContacts = [{...AppState.selectedContact}];
+    populateScheduleModal();
+    document.getElementById('scheduleModal').classList.remove('hidden');
+}
+
+function openScheduleForTemplate(msgId) {
+    const selected = AppState.contacts.filter(c=>c.selected);
+    AppState.scheduleTargetContacts = selected.length > 0 ? selected.map(c=>({...c})) : AppState.contacts.map(c=>({...c}));
+    populateScheduleModal(msgId);
+    document.getElementById('scheduleModal').classList.remove('hidden');
+}
+
+function populateScheduleModal(preselectedMsgId) {
+    renderMessages();
+    if (preselectedMsgId) {
+        const sel = document.getElementById('scheduleMsg');
+        if (sel) sel.value = preselectedMsgId;
+    }
+    const contacts = AppState.scheduleTargetContacts;
+    document.getElementById('scheduleContactCount').textContent = `${contacts.length} contato${contacts.length!==1?'s':''}`;
+    const preview = document.getElementById('scheduleContactPreview');
+    preview.innerHTML = contacts.slice(0,5).map(c=>`<span class="text-[10px] bg-dark-700 text-dark-300 px-2 py-0.5 rounded-full">${escapeHtml(getDisplayName(c))}</span>`).join('') +
+        (contacts.length > 5 ? `<span class="text-[10px] text-dark-500">+${contacts.length-5} mais</span>` : '');
+}
+
+function closeSchedule() { document.getElementById('scheduleModal').classList.add('hidden'); }
+
+function addToQueue() {
+    const msgId      = document.getElementById('scheduleMsg').value;
+    const delay      = Math.max(16, parseInt(document.getElementById('scheduleDelay').value)||16);
+    const randomDelay= document.getElementById('randomDelay').checked;
+    const message    = AppState.messages.find(m=>m.id===msgId);
+    if (!message) { showToast('error','Sem template','Escolha uma mensagem'); return; }
+    const contacts = AppState.scheduleTargetContacts;
+    if (contacts.length === 0) { showToast('error','Sem contatos','Selecione pelo menos um contato'); return; }
+
+    AppState.queue.push({
+        id            : genId(),
+        messageId     : message.id,
+        messageTitle  : message.title,
+        messageContent: message.content,
+        contacts      : contacts.map(c=>({...c})),
+        delay, randomDelay,
+        totalContacts : contacts.length,
+        sentInQueue   : 0,
+        status        : 'pending',
+    });
+
+    saveToStorage(); renderQueue(); closeSchedule();
+    showToast('success','Adicionado à fila',`${contacts.length} mensagens de "${message.title}"`);
+    switchTab('queue');
+}
+
+// ========================================
+// CHAT — envio manual (real)
+// ========================================
+async function sendMessage() {
+    if (!AppState.connected) { showToast('error','Desconectado','Inicie o webservice.js primeiro'); return; }
+    const c = AppState.selectedContact;
+    if (!c) { showToast('warning','Sem contato','Selecione um contato'); return; }
+    const input   = document.getElementById('messageInput');
+    const content = input.value.trim();
+    if (!content) return;
+
+    if (!AppState.chatHistory[c.id]) AppState.chatHistory[c.id] = [];
+    const msgEntry = { type:'out', content, timestamp:Date.now(), status:'sending' };
+    AppState.chatHistory[c.id].push(msgEntry);
+
+    input.value = '';
+    autoResizeTextarea(input);
+    loadChatMessages();
+
+    // Envio real
+    const result = await sendViaWebservice(c.phone, content);
+    const idx    = AppState.chatHistory[c.id].length - 1;
+    AppState.chatHistory[c.id][idx].status = result.ok ? 'delivered' : 'failed';
+    loadChatMessages();
+    saveToStorage();
+
+    AppState.sentCount++;
+    updateStats();
+
+    if (result.ok) {
+        showToast('success', 'Enviado!', `Mensagem para ${getDisplayName(c)}`);
+    } else {
+        showToast('error', 'Falha no envio', result.error || 'Verifique o webservice');
+    }
+}
+
+function focusMessageInput() {
+    if (!AppState.selectedContact) { showToast('warning','Sem contato','Selecione um contato'); return; }
+    document.getElementById('messageInput').focus();
+}
+
+// ========================================
+// QUEUE
+// ========================================
+function renderQueue() {
+    const container = document.getElementById('queueList');
+    if (AppState.queue.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#3A3A40" stroke-width="1.5" class="mx-auto mb-3"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg><p class="text-dark-500 text-sm">Fila vazia</p><p class="text-dark-600 text-xs mt-1">Agende uma campanha para começar</p></div>`;
+    } else {
+        container.innerHTML = AppState.queue.map(q => {
+            const progress     = q.totalContacts ? Math.round((q.sentInQueue/q.totalContacts)*100) : 0;
+            const statusColor  = {running:'bg-shineray-500 sending-animation',completed:'bg-green-500',paused:'bg-yellow-500',pending:'bg-dark-500'}[q.status]||'bg-dark-500';
+            const statusLabel  = {running:'Enviando...',completed:'Concluído',paused:'Pausado',pending:'Aguardando'}[q.status]||'';
+            return `<div class="bg-dark-800 rounded-lg p-3 mb-2">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="w-2 h-2 rounded-full shrink-0 ${statusColor}"></span>
+                        <h4 class="text-sm font-medium truncate">${escapeHtml(q.messageTitle)}</h4>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        ${q.status==='running'   ? `<button onclick="pauseQueueItem('${q.id}')" class="p-1 rounded hover:bg-dark-600" title="Pausar"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>` : ''}
+                        ${q.status==='paused'    ? `<button onclick="resumeQueueItem('${q.id}')" class="p-1 rounded hover:bg-dark-600" title="Continuar"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>` : ''}
+                        ${q.status==='pending'   ? `<button onclick="startQueueItem('${q.id}')" class="p-1 rounded hover:bg-dark-600" title="Iniciar"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#E31937" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg></button>` : ''}
+                        ${q.status!=='completed' ? `<button onclick="removeQueueItem('${q.id}')" class="p-1 rounded hover:bg-dark-600" title="Remover"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>` : ''}
+                    </div>
+                </div>
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs text-dark-400">${q.sentInQueue}/${q.totalContacts} enviadas</span>
+                    <span class="text-xs font-semibold ${progress===100?'text-green-400':'text-shineray-400'}">${progress}%</span>
+                </div>
+                <div class="w-full h-1.5 bg-dark-700 rounded-full overflow-hidden">
+                    <div class="progress-bar h-full ${progress===100?'bg-green-500':'bg-gradient-to-r from-shineray-600 to-shineray-400'} rounded-full" style="width:${progress}%"></div>
+                </div>
+                <div class="flex items-center justify-between mt-2">
+                    <span class="text-[10px] text-dark-500">Delay: ${q.delay}s${q.randomDelay?' + aleatório (0-10s)':''}</span>
+                    <span class="text-[10px] text-dark-500">${statusLabel}</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+    updateStats();
+}
+
+function removeQueueItem(id) {
+    AppState.queue = AppState.queue.filter(q=>q.id!==id);
+    saveToStorage(); renderQueue();
+}
+
+function pauseQueueItem(id) {
+    const item = AppState.queue.find(q=>q.id===id);
+    if (!item) return;
+    item.status = 'paused';
+    AppState.dispatching = false;
+    if (AppState.timerInterval) { clearInterval(AppState.timerInterval); AppState.timerInterval = null; }
+    updateStartButton(); saveToStorage(); renderQueue();
+    showToast('info','Pausado','Disparo pausado');
+}
+
+function resumeQueueItem(id) {
+    const item = AppState.queue.find(q=>q.id===id);
+    if (!item) return;
+    if (!AppState.connected) { showToast('error','Desconectado','Inicie o webservice.js primeiro'); return; }
+    AppState.queue.forEach(q=>{ if(q.status==='running') q.status='paused'; });
+    item.status = 'running';
+    AppState.dispatching = true;
+    updateStartButton(); saveToStorage(); processQueue(); renderQueue();
+    showToast('info','Retomado','Disparo continuado');
+}
+
+function startQueueItem(id) {
+    if (!AppState.connected) { showToast('error','Desconectado','Inicie o webservice.js primeiro'); return; }
+    AppState.queue.forEach(q=>{ if(q.status==='running') q.status='paused'; });
+    const item = AppState.queue.find(q=>q.id===id);
+    if (!item) return;
+    item.status = 'running';
+    AppState.dispatching = true;
+    updateStartButton(); processQueue(); renderQueue(); switchTab('queue');
+}
+
+// ========================================
+// DISPATCH ENGINE — async com envio real
+// ========================================
+function toggleDispatch() {
+    AppState.dispatching ? stopDispatch() : startDispatch();
+}
+
+function startDispatch() {
+    if (!AppState.connected) { showToast('error','Desconectado','Inicie o webservice.js primeiro'); return; }
+    const selectedContacts = AppState.contacts.filter(c=>c.selected);
+
+    if (AppState.queue.filter(q=>q.status==='pending'||q.status==='paused').length === 0) {
+        if (selectedContacts.length > 0 && AppState.messages.length > 0) {
+            AppState.queue.push({
+                id            : genId(),
+                messageId     : AppState.messages[0].id,
+                messageTitle  : AppState.messages[0].title,
+                messageContent: AppState.messages[0].content,
+                contacts      : selectedContacts.map(c=>({...c})),
+                delay         : parseInt(document.getElementById('defaultDelay')?.value)||16,
+                randomDelay   : document.getElementById('settingsRandomDelay')?.checked ?? true,
+                totalContacts : selectedContacts.length,
+                sentInQueue   : 0,
+                status        : 'pending',
+            });
+        } else {
+            showToast('warning','Fila vazia','Adicione mensagens à fila ou selecione contatos');
+            return;
+        }
+    }
+
+    const pending = AppState.queue.find(q=>q.status==='pending'||q.status==='paused');
+    if (!pending) { showToast('info','Sem pendências','Todas as filas foram concluídas'); return; }
+    pending.status = 'running';
+    AppState.dispatching = true;
+    updateStartButton(); processQueue(); renderQueue();
+    showToast('success','Disparo iniciado!','Mensagens sendo enviadas');
+}
+
+function stopDispatch() {
+    AppState.dispatching = false;
+    if (AppState.timerInterval) { clearInterval(AppState.timerInterval); AppState.timerInterval = null; }
+    AppState.queue.forEach(q=>{ if(q.status==='running') q.status='paused'; });
+    document.getElementById('activeJobInfo').classList.add('hidden');
+    updateStartButton(); saveToStorage(); renderQueue();
+    showToast('info','Pausado','Disparo pausado');
+}
+
+async function processQueue() {
+    if (!AppState.dispatching) return;
+    const running = AppState.queue.find(q=>q.status==='running');
+    if (!running) { AppState.dispatching=false; updateStartButton(); return; }
+
+    if (running.sentInQueue >= running.totalContacts) {
+        running.status = 'completed';
+        document.getElementById('activeJobInfo').classList.add('hidden');
+        saveToStorage(); renderQueue();
+        const next = AppState.queue.find(q=>q.status==='pending');
+        if (next) { next.status='running'; processQueue(); }
+        else {
+            AppState.dispatching=false; updateStartButton();
+            showToast('success','Concluído! 🎉','Todas as mensagens foram enviadas');
+        }
+        return;
+    }
+
+    const contact     = running.contacts[running.sentInQueue];
+    const displayName = getDisplayName(contact);
+
+    document.getElementById('activeJobInfo').classList.remove('hidden');
+    document.getElementById('activeJobName').textContent  = displayName;
+    document.getElementById('activeJobPhone').textContent = formatPhone(contact.phone);
+
+    // Personaliza mensagem com nome humanizado (inclui ~ se não salvo)
+    const content = running.messageContent.replace(/\{nome\}/gi, displayName);
+
+    if (!AppState.chatHistory[contact.id]) AppState.chatHistory[contact.id] = [];
+    AppState.chatHistory[contact.id].push({ type:'out', content, timestamp:Date.now(), status:'sending' });
+    if (AppState.selectedContact?.id === contact.id) loadChatMessages();
+
+    // ── ENVIO REAL ──────────────────────────────────────
+    const onError = document.getElementById('onError')?.value || 'skip';
+    let result    = await sendViaWebservice(contact.phone, content);
+
+    // Retry se configurado
+    if (!result.ok && onError === 'retry') {
+        showToast('warning', `Retry: ${displayName}`, 'Aguardando 5s...');
+        await new Promise(r => setTimeout(r, 5000));
+        result = await sendViaWebservice(contact.phone, content);
+    }
+
+    // Atualiza status da mensagem no histórico
+    const msgIdx = AppState.chatHistory[contact.id].length - 1;
+    AppState.chatHistory[contact.id][msgIdx].status = result.ok ? 'delivered' : 'failed';
+    if (AppState.selectedContact?.id === contact.id) loadChatMessages();
+
+    // Para se configurado assim
+    if (!result.ok && onError === 'stop') {
+        showToast('error', 'Disparo pausado', `Falha: ${displayName}`);
+        stopDispatch();
+        return;
+    }
+    if (!result.ok && onError !== 'stop') {
+        showToast('error', `Falha: ${displayName}`, result.error || 'Pulando...');
+    }
+    // ────────────────────────────────────────────────────
+
+    running.sentInQueue++;
+    AppState.sentCount++;
+    saveToStorage(); updateStats(); renderQueue();
+
+    // Delay humanizado: base + aleatório 0-10s
+    const baseDelay = running.delay || 16;
+    const extra     = running.randomDelay ? Math.floor(Math.random() * 11) : 0;
+    let countdown   = baseDelay + extra;
+    document.getElementById('activeJobTimer').textContent = `${countdown}s`;
+
+    if (AppState.timerInterval) clearInterval(AppState.timerInterval);
+    AppState.timerInterval = setInterval(() => {
+        countdown--;
+        document.getElementById('activeJobTimer').textContent = `${countdown}s`;
+        if (countdown <= 0) {
+            clearInterval(AppState.timerInterval);
+            AppState.timerInterval = null;
+            processQueue();
+        }
+    }, 1000);
+}
+
+function updateStartButton() {
+    const btn = document.getElementById('startBtn');
+    if (AppState.dispatching) {
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> PAUSAR DISPARO`;
+        btn.className = 'w-full py-3 rounded-lg font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-dark-900';
+    } else {
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> INICIAR DISPARO`;
+        btn.className = 'w-full py-3 rounded-lg font-bold text-sm tracking-wide transition-all duration-300 flex items-center justify-center gap-2 bg-shineray-500 hover:bg-shineray-600 text-white';
+    }
+}
+
+// ========================================
+// STATS
+// ========================================
+function updateStats() {
+    document.getElementById('totalSent').textContent = AppState.sentCount;
+    const remaining = AppState.queue.reduce((a,q)=>a+(q.totalContacts-q.sentInQueue),0);
+    document.getElementById('queueCount').textContent = remaining;
+    const total = AppState.queue.reduce((a,q)=>a+q.totalContacts,0);
+    const sent  = AppState.queue.reduce((a,q)=>a+q.sentInQueue,0);
+    const pct   = total ? Math.round((sent/total)*100) : 0;
+    document.getElementById('queueProgressBar').style.width = `${pct}%`;
+    document.getElementById('queueProgressText').textContent = `${pct}%`;
+}
+
+// ========================================
+// TABS
+// ========================================
+function switchTab(tab) {
+    ['contacts','messages','queue'].forEach(t => {
+        const panel  = document.getElementById(`panel-${t}`);
+        const tabBtn = document.getElementById(`tab-${t}`);
+        if (t === tab) {
+            panel.classList.remove('hidden');
+            tabBtn.classList.add('border-shineray-500','text-shineray-400');
+            tabBtn.classList.remove('border-transparent','text-dark-400');
+        } else {
+            panel.classList.add('hidden');
+            tabBtn.classList.remove('border-shineray-500','text-shineray-400');
+            tabBtn.classList.add('border-transparent','text-dark-400');
+        }
+    });
+    if (tab === 'queue') renderQueue();
+}
+
+// ========================================
+// SEARCH
+// ========================================
+function handleSearch(v) { renderContacts(); renderMessages(); }
+
+// ========================================
+// SETTINGS
+// ========================================
+function toggleSettings() { document.getElementById('settingsPanel').classList.toggle('hidden'); }
+function saveSettings()   { toggleSettings(); showToast('success','Configurações salvas','Preferências atualizadas'); }
+
+// ========================================
+// IMPORT
+// ========================================
+function openImport()  { document.getElementById('importModal').classList.remove('hidden'); }
+function closeImport() { document.getElementById('importModal').classList.add('hidden'); }
+
+function importContacts() {
+    const raw = document.getElementById('importData').value.trim();
+    if (!raw) { showToast('error','Dados vazios','Cole os contatos para importar'); return; }
+    let added = 0;
+    raw.split('\n').filter(l=>l.trim()).forEach(line => {
+        const parts = line.split(';');
+        let name, phone, tags = [];
+        if (parts.length >= 2) {
+            name  = parts[0].trim();
+            phone = parts[1].trim().replace(/\D/g,'');
+            tags  = parts[2] ? parts[2].trim().split(',').map(t=>t.trim()).filter(Boolean) : [];
+        } else {
+            const num = line.trim().replace(/\D/g,'');
+            if (num.length >= 8) { name = num; phone = num; }
+            else return;
+        }
+        if (name && phone) {
+            AppState.contacts.push({ id:genId(), name, phone, tags, selected:false });
+            added++;
+        }
+    });
+    if (added > 0) {
+        saveToStorage(); renderContacts(); closeImport();
+        showToast('success','Importado',`${added} contato${added!==1?'s':''} adicionado${added!==1?'s':''}`);
+        document.getElementById('importData').value = '';
+    } else {
+        showToast('error','Formato inválido','Use: Nome;Telefone');
+    }
+}
+
+// ========================================
+// UI HELPERS
+// ========================================
+let toastTimer = null;
+function showToast(type, title, message) {
+    const toast = document.getElementById('toast');
+    const icons = {
+        success: '<div class="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>',
+        error:   '<div class="w-8 h-8 bg-red-500/20 rounded-lg flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F87171" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>',
+        warning: '<div class="w-8 h-8 bg-yellow-500/20 rounded-lg flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>',
+        info:    '<div class="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>',
+    };
+    document.getElementById('toastIcon').innerHTML    = icons[type]||icons.info;
+    document.getElementById('toastTitle').textContent = title;
+    document.getElementById('toastMessage').textContent = message;
+    toast.classList.remove('translate-y-20','opacity-0');
+    toast.classList.add('translate-y-0','opacity-100');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+        toast.classList.add('translate-y-20','opacity-0');
+        toast.classList.remove('translate-y-0','opacity-100');
+    }, 3500);
+}
+
+function handleInputKeydown(e) {
+    if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResizeTextarea(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 128)+'px';
+}
+
+const EMOJIS = ['😀','🔥','🏍️','😍','👍','🎉','💰','⚡','📞','✅','❤️','🚀','📌','🎯','💡','🤝','📱','🔔'];
+function insertEmoji() {
+    const emoji = EMOJIS[Math.floor(Math.random()*EMOJIS.length)];
+    const input = document.getElementById('messageInput');
+    const pos   = input.selectionStart;
+    input.value = input.value.slice(0,pos)+emoji+input.value.slice(pos);
+    input.setSelectionRange(pos+emoji.length, pos+emoji.length);
+    autoResizeTextarea(input);
+    input.focus();
+}
+
+document.addEventListener('keydown', e => {
+    if ((e.ctrlKey||e.metaKey) && e.key==='Enter') { e.preventDefault(); toggleDispatch(); }
+    if (e.key==='Escape') {
+        ['addContactModal','addMessageModal','scheduleModal','settingsPanel','importModal'].forEach(id=>{
+            document.getElementById(id).classList.add('hidden');
+        });
+    }
+});
+</script>
+</body>
+</html>

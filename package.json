@@ -1,0 +1,19 @@
+{
+  "name": "shineray-dispatcher",
+  "version": "1.0.0",
+  "description": "Disparador humanizado de mensagens WhatsApp via CallMeBot",
+  "main": "webservice.js",
+  "scripts": {
+    "start": "node webservice.js",
+    "dev": "nodemon webservice.js"
+  },
+  "keywords": ["whatsapp", "callmebot", "dispatcher", "shineray"],
+  "author": "Shineray",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  }
+}

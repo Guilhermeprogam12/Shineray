@@ -1,0 +1,10 @@
+[
+  { "name": "João Silva",     "phone": "5511999990001", "tags": ["cliente", "shineray"] },
+  { "name": "Maria Oliveira", "phone": "5511988880002", "tags": ["lead"] },
+  { "name": "Carlos Santos",  "phone": "5521977770003", "tags": ["cliente", "posvenda"] },
+  { "name": "Ana Paula",      "phone": "5531966660004", "tags": ["lead", "shineray"] },
+  { "name": "Roberto Lima",   "phone": "5511955550005", "tags": ["cliente"] },
+  { "name": "Fernanda Costa", "phone": "5541944440006", "tags": ["aniversario"] },
+  { "name": "Pedro Almeida",  "phone": "5511933330007", "tags": ["lead", "shineray"] },
+  { "name": "Lucia Ferreira", "phone": "5551922220008", "tags": ["cliente"] }
+]
